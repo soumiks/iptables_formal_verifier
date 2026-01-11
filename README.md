@@ -52,9 +52,11 @@ This will run the suite of Unit Proofs. A successful run (exit code 0) means the
 
 ## Modeling Details
 
-- **Supported Flags**: `-s`, `-d`, `-p`, `--sport`, `--dport`, `-j`.
+- **Supported Flags (Parsed & Modeled)**: `-s`, `-d`, `-p`, `--sport`, `--dport`, `-j`.
+- **Supported Flags (Parsed as Wildcard)**: `-i`, `-o`, `-t`, `-m` (and modules like `conntrack`, `limit`, `recent`), `--to-destination`, `--log-prefix`, etc. These are parsed to allow valid `iptables-save` files to process, but are currently treated as "always true" in the SMT encoding.
 - **Targets**: `ACCEPT`, `DROP`, `REJECT`, `RETURN` are modeled explicitly. Others are generic jumps.
 - **Logic**: Each `-A` rule is translated into a function `(define-fun ruleN ...)` and an assertion `(assert (=> (ruleN ...) action))`.
+- **Empty Input**: If the input contains no valid `-A` rules (e.g. empty file or filename passed as argument), the tool outputs nothing (empty string) instead of an SMT preamble.
 
 ## License
 
