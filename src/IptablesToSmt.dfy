@@ -357,6 +357,7 @@ module IptablesToSmt {
   }
 
   function EscapeForSmt(text: string): string
+    ensures forall i :: 0 <= i < |EscapeForSmt(text)| && EscapeForSmt(text)[i] == '"' ==> (i > 0 && EscapeForSmt(text)[i-1] == '\\')
   {
      // Recursive definition needed for function
      EscapeForSmtRecursive(text)
@@ -364,6 +365,7 @@ module IptablesToSmt {
 
   function EscapeForSmtRecursive(text: string): string
     decreases |text|
+    ensures forall i :: 0 <= i < |EscapeForSmtRecursive(text)| && EscapeForSmtRecursive(text)[i] == '"' ==> (i > 0 && EscapeForSmtRecursive(text)[i-1] == '\\')
   {
     if |text| == 0 then ""
     else
@@ -376,6 +378,8 @@ module IptablesToSmt {
   // Pure function version of FormatRule
   function FormatRule(rule: Rule, index: int): string
     requires index >= 0
+    // Note: To verify substring containment, we need inductive lemmas for string concatenation.
+    // ensures IsSubstring(FormatRule(rule, index), EscapeForSmt(rule.chain))
   {
     var indexText := IntToString(index);
     var lineText := IntToString(rule.lineNumber);
@@ -746,5 +750,12 @@ module IptablesToSmt {
   predicate IsWhitespace(ch: char)
   {
     ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n'
+  }
+  predicate IsSubstring(haystack: string, needle: string)
+  {
+    if |needle| > |haystack| then false
+    else if |needle| == 0 then true
+    else if haystack[0..|needle|] == needle then true
+    else IsSubstring(haystack[1..], needle)
   }
 }

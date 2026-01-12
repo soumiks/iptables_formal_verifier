@@ -63,7 +63,7 @@ module IptablesToSmt {
   method Main(args: seq<string>)
     decreases args
   {
-    if |args| == 0 {
+    if |args| <= 1 {
       PrintUsage();
       return;
     }
@@ -90,7 +90,6 @@ module IptablesToSmt {
 
   method ConvertIptablesToSmt(input: string) returns (smt: string)
     requires forall k: int {:trigger input[k]} :: 0 <= k < |input| ==> input[k] != '\r'
-    ensures |smt| > 0
     decreases input
   {
     var lines := SplitLines(input);
@@ -141,12 +140,12 @@ module IptablesToSmt {
   }
 
   function ValidTokens(tokens: seq<string>): bool
-    decreases tokens
+    decreases |tokens|
   {
     if |tokens| < 1 then
       true
     else
-      var t: seq<char> := tokens[0]; if t == ""-s"" || t == ""-d"" || t == ""-p"" || t == ""--sport"" || t == ""--dport"" || t == ""-j"" then if |tokens| >= 2 then ValidTokens(tokens[2..]) else false else if t == ""-A"" then if |tokens| >= 2 then ValidTokens(tokens[2..]) else false else false
+      var t: seq<char> := tokens[0]; if t == ""-s"" || t == ""-d"" || t == ""-p"" || t == ""--sport"" || t == ""--dport"" || t == ""-j"" || t == ""-i"" || t == ""-o"" || t == ""-t"" || t == ""-m"" || t == ""--to-destination"" || t == ""--to-source"" || t == ""--log-prefix"" || t == ""--log-level"" || t == ""--limit"" || t == ""--limit-burst"" || t == ""--ctstate"" || t == ""--seconds"" || t == ""--hitcount"" || t == ""--name"" || t == ""--dports"" || t == ""--sports"" then if |tokens| >= 2 then ValidTokens(tokens[2..]) else false else if t == ""--set"" || t == ""--update"" || t == ""--rcheck"" || t == ""--remove"" || t == ""--rsource"" || t == ""--rdest"" then ValidTokens(tokens[1..]) else if t == ""-A"" then if |tokens| >= 2 then ValidTokens(tokens[2..]) else false else false
   }
 
   method ParseRuleTokens(tokens: seq<string>, lineNumber: int, rawLine: string)
@@ -197,9 +196,14 @@ module IptablesToSmt {
   }
 
   method BuildSmtDocument(rules: seq<Rule>) returns (doc: string)
-    ensures |doc| > 0
+    ensures |rules| == 0 ==> doc == """"
+    ensures |rules| > 0 ==> |doc| > 15 && doc[0 .. 15] == ""(set-logic ALL)""
     decreases rules
   {
+    if |rules| == 0 {
+      doc := """";
+      return;
+    }
     var builder := ""(set-logic ALL)\n"";
     builder := builder + ""(declare-const packet_chain String)\n"";
     builder := builder + ""(declare-const packet_src String)\n"";
@@ -210,15 +214,11 @@ module IptablesToSmt {
     builder := builder + ""(declare-const packet_action String)\n"";
     builder := builder + ""(assert (distinct packet_chain \""\""))\n"";
     builder := builder + ""\n"";
-    if |rules| == 0 {
-      builder := builder + ""; No -A rules were found in the input.\n"";
-      doc := builder;
-      return;
-    }
     var i := 0;
     while i < |rules|
       invariant 0 <= i <= |rules|
-      invariant |builder| > 0
+      invariant |builder| > 15
+      invariant builder[0 .. 15] == ""(set-logic ALL)""
       decreases |rules| - i
     {
       var formatted := FormatRule(rules[i], i);
@@ -6330,7 +6330,7 @@ namespace IptablesToSmt {
   public partial class __default {
     public static void _Main(Dafny.ISequence<Dafny.ISequence<Dafny.Rune>> args)
     {
-      if ((new BigInteger((args).Count)).Sign == 0) {
+      if ((new BigInteger((args).Count)) <= (BigInteger.One)) {
         IptablesToSmt.__default.PrintUsage();
         return ;
       }
@@ -6441,7 +6441,7 @@ namespace IptablesToSmt {
         return true;
       } else {
         Dafny.ISequence<Dafny.Rune> _0_t = (tokens).Select(BigInteger.Zero);
-        if (((((((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("-s"))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("-d")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("-p")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--sport")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--dport")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("-j")))) {
+        if (((((((((((((((((((((((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("-s"))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("-d")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("-p")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--sport")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--dport")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("-j")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("-i")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("-o")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("-t")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("-m")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--to-destination")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--to-source")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--log-prefix")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--log-level")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--limit")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--limit-burst")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--ctstate")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--seconds")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--hitcount")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--name")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--dports")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--sports")))) {
           if ((new BigInteger((tokens).Count)) >= (new BigInteger(2))) {
             Dafny.ISequence<Dafny.ISequence<Dafny.Rune>> _in0 = (tokens).Drop(new BigInteger(2));
             tokens = _in0;
@@ -6449,10 +6449,14 @@ namespace IptablesToSmt {
           } else {
             return false;
           }
+        } else if (((((((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--set"))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--update")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--rcheck")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--remove")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--rsource")))) || ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("--rdest")))) {
+          Dafny.ISequence<Dafny.ISequence<Dafny.Rune>> _in1 = (tokens).Drop(BigInteger.One);
+          tokens = _in1;
+          goto TAIL_CALL_START;
         } else if ((_0_t).Equals(Dafny.Sequence<Dafny.Rune>.UnicodeFromString("-A"))) {
           if ((new BigInteger((tokens).Count)) >= (new BigInteger(2))) {
-            Dafny.ISequence<Dafny.ISequence<Dafny.Rune>> _in1 = (tokens).Drop(new BigInteger(2));
-            tokens = _in1;
+            Dafny.ISequence<Dafny.ISequence<Dafny.Rune>> _in2 = (tokens).Drop(new BigInteger(2));
+            tokens = _in2;
             goto TAIL_CALL_START;
           } else {
             return false;
@@ -6511,6 +6515,10 @@ namespace IptablesToSmt {
     public static Dafny.ISequence<Dafny.Rune> BuildSmtDocument(Dafny.ISequence<IptablesToSmt._IRule> rules)
     {
       Dafny.ISequence<Dafny.Rune> doc = Dafny.Sequence<Dafny.Rune>.Empty;
+      if ((new BigInteger((rules).Count)).Sign == 0) {
+        doc = Dafny.Sequence<Dafny.Rune>.UnicodeFromString("");
+        return doc;
+      }
       Dafny.ISequence<Dafny.Rune> _0_builder;
       _0_builder = Dafny.Sequence<Dafny.Rune>.UnicodeFromString("(set-logic ALL)\n");
       _0_builder = Dafny.Sequence<Dafny.Rune>.Concat(_0_builder, Dafny.Sequence<Dafny.Rune>.UnicodeFromString("(declare-const packet_chain String)\n"));
@@ -6522,11 +6530,6 @@ namespace IptablesToSmt {
       _0_builder = Dafny.Sequence<Dafny.Rune>.Concat(_0_builder, Dafny.Sequence<Dafny.Rune>.UnicodeFromString("(declare-const packet_action String)\n"));
       _0_builder = Dafny.Sequence<Dafny.Rune>.Concat(_0_builder, Dafny.Sequence<Dafny.Rune>.UnicodeFromString("(assert (distinct packet_chain \"\"))\n"));
       _0_builder = Dafny.Sequence<Dafny.Rune>.Concat(_0_builder, Dafny.Sequence<Dafny.Rune>.UnicodeFromString("\n"));
-      if ((new BigInteger((rules).Count)).Sign == 0) {
-        _0_builder = Dafny.Sequence<Dafny.Rune>.Concat(_0_builder, Dafny.Sequence<Dafny.Rune>.UnicodeFromString("; No -A rules were found in the input.\n"));
-        doc = _0_builder;
-        return doc;
-      }
       BigInteger _1_i;
       _1_i = BigInteger.Zero;
       while ((_1_i) < (new BigInteger((rules).Count))) {
