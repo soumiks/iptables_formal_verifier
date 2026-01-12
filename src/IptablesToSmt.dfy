@@ -252,7 +252,8 @@ module IptablesToSmt {
   }
 
   method BuildSmtDocument(rules: seq<Rule>) returns (doc: string)
-    // removed ensures |doc| > 0 constraint to allow empty output
+    ensures |rules| == 0 ==> doc == ""
+    ensures |rules| > 0 ==> |doc| > 15 && doc[0..15] == "(set-logic ALL)"
   {
     if |rules| == 0 {
       doc := "";
@@ -274,7 +275,8 @@ module IptablesToSmt {
     while i < |rules|
       decreases |rules| - i
       invariant 0 <= i <= |rules|
-      invariant |builder| > 0
+      invariant |builder| > 15
+      invariant builder[0..15] == "(set-logic ALL)"
     {
       var formatted := FormatRule(rules[i], i);
       builder := builder + formatted;
