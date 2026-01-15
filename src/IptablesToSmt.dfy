@@ -42,40 +42,25 @@ module IptablesToSmt {
     original: string
   )
 
-  // 'method' is the unit of executable code in Dafny.
-  // It can have side effects (like printing), input arguments, and return values.
-  method Main(args: seq<string>)
-  {
-    // Dafny's Main receives the executable name as args[0].
-    // If we only have the executable name (size 1) or less, we have no input.
-    if |args| <= 1 {
-      PrintUsage();
-      return;
-    }
+  // Result from an SMT check
+  datatype SmtResult = Sat | Unsat | Unknown | Error(msg: string)
 
-    // Sequences are 0-indexed. We take the last argument as the input payload.
-    var payload := args[|args| - 1];
-    
-    // Additionally, if the payload is explicitly empty, we might want to show usage or just process it.
-    // Given the user request "if there is no input, print the usage help", explicit empty string argument could be debatable,
-    // but typically CLI tools treat empty string arg as empty input.
-    // Let's stick to the arg count check for now as the primary fix.
-    
-    // Runtime check to respect the precondition we added
-    if exists k :: 0 <= k < |payload| && payload[k] == '\r' {
-      print "Error: Input contains carriage returns (\\r). Please normalize to \\n only.\n";
-      return;
-    }
-    
-    var smt := ConvertIptablesToSmt(payload);
-    print smt;
+  // Interface for the SMT Solver (The "Oracle")
+  // This trait will be implemented by the external runtime (Go/C#).
+  trait {:termination false} SmtSolver {
+      // Sends a raw command to the solver (e.g. "(push)", "(pop)")
+      // Returns true if the command was sent successfully.
+      method SendCommand(cmd: string) returns (success: bool)
+
+      // Checks satisfiability of the current context.
+      method CheckSat() returns (result: SmtResult)
+
+      // Gets the value of a variable in the current model.
+      // Precondition: check-sat must have returned Sat previously.
+      method GetValue(variable: string) returns (val: string)
   }
 
-  method PrintUsage()
-  {
-    var usage := GetUsageString();
-    print usage;
-  }
+
 
   method GetUsageString() returns (text: string)
     ensures |text| > 0
@@ -272,15 +257,24 @@ module IptablesToSmt {
     builder := builder + "\n";
 
     var i := 0;
+    var prevNegations := "";
+
     while i < |rules|
       decreases |rules| - i
       invariant 0 <= i <= |rules|
       invariant |builder| > 15
       invariant builder[0..15] == "(set-logic ALL)"
     {
-      var formatted := FormatRule(rules[i], i);
+      var formatted := FormatRule(rules[i], i, prevNegations);
       builder := builder + formatted;
       builder := builder + "\n";
+      
+      // Update prevNegations to include this rule
+      // (not (ruleN packet_chain packet_src packet_dst packet_proto packet_sport packet_dport))
+      var indexText := IntToString(i);
+      var call := "(rule" + indexText + " packet_chain packet_src packet_dst packet_proto packet_sport packet_dport)";
+      prevNegations := prevNegations + " (not " + call + ")";
+      
       i := i + 1;
     }
 
@@ -313,15 +307,15 @@ module IptablesToSmt {
     "0123456789"[d .. d+1]
   }
 
-  function BuildRuleConditions(rule: Rule): seq<string>
+  function BuildRuleConditions(rule: Rule, prefix: string): seq<string>
   {
          var chainLiteral := FormatStringLiteral(rule.chain);
-    var c1 := ["(= pkt_chain " + chainLiteral + ")"];
-    var c2 := MaybeAppend(c1, "pkt_src", rule.source);
-    var c3 := MaybeAppend(c2, "pkt_dst", rule.destination);
-    var c4 := MaybeAppend(c3, "pkt_proto", rule.protocol);
-    var c5 := MaybeAppend(c4, "pkt_sport", rule.srcPort);
-    var c6 := MaybeAppend(c5, "pkt_dport", rule.dstPort);
+    var c1 := ["(= " + prefix + "chain " + chainLiteral + ")"];
+    var c2 := MaybeAppend(c1, prefix + "src", rule.source);
+    var c3 := MaybeAppend(c2, prefix + "dst", rule.destination);
+    var c4 := MaybeAppend(c3, prefix + "proto", rule.protocol);
+    var c5 := MaybeAppend(c4, prefix + "sport", rule.srcPort);
+    var c6 := MaybeAppend(c5, prefix + "dport", rule.dstPort);
     c6
   }
 
@@ -376,27 +370,48 @@ module IptablesToSmt {
   }
 
   // Pure function version of FormatRule
-  function FormatRule(rule: Rule, index: int): string
+  // Pure function version of FormatRule
+  // Refactored to separate Definition and Assertion for Orchestrator usage
+  function FormatRule(rule: Rule, index: int, prevNegations: string): string
     requires index >= 0
-    // Note: To verify substring containment, we need inductive lemmas for string concatenation.
-    // ensures IsSubstring(FormatRule(rule, index), EscapeForSmt(rule.chain))
+  {
+    var def := DefineRuleFunction(rule, index);
+    var assertion := AssertRuleLogic(rule, index, prevNegations, "packet_action");
+    def + assertion
+  }
+
+  function DefineRuleFunction(rule: Rule, index: int): string
+    requires index >= 0
   {
     var indexText := IntToString(index);
     var lineText := IntToString(rule.lineNumber);
     var header := "; Rule " + indexText + " (line " + lineText + "): " + rule.original + "\n";
     var def := "(define-fun rule" + indexText + " ((pkt_chain String) (pkt_src String) (pkt_dst String) (pkt_proto String) (pkt_sport String) (pkt_dport String)) Bool\n";
-    var conditions := BuildRuleConditions(rule);
+    var conditions := BuildRuleConditions(rule, "pkt_");
 
     var condBuilder := 
       if |conditions| == 0 then "  true\n"
       else "  (and\n" + JoinLinesIndent(conditions) + "  )\n";
 
     var closing := ")\n";
-    var targetLiteral := FormatTargetLiteral(rule.target);
-    var action := "(assert (=> (rule" + indexText + " packet_chain packet_src packet_dst packet_proto packet_sport packet_dport)\n" +
-      "            (= packet_action " + targetLiteral + ")))\n";
+    
+    header + def + condBuilder + closing
+  }
 
-    header + def + condBuilder + closing + action
+  function AssertRuleLogic(rule: Rule, index: int, prevNegations: string, actionVar: string): string
+    requires index >= 0
+  {
+     var indexText := IntToString(index);
+     var targetLiteral := FormatTargetLiteral(rule.target);
+     
+     // First-match-wins logic:
+     // (assert (=> (and (ruleN ...) prevNegations) (= actionVar TARGET)))
+     
+     var ruleCall := "(rule" + indexText + " packet_chain packet_src packet_dst packet_proto packet_sport packet_dport)";
+     var premise := if prevNegations == "" then ruleCall else "(and " + ruleCall + prevNegations + ")";
+     
+     "(assert (=> " + premise + "\n" +
+       "            (= " + actionVar + " " + targetLiteral + ")))\n"
   }
 
   function JoinLinesIndent(lines: seq<string>): string

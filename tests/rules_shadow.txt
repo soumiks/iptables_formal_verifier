@@ -1,0 +1,5 @@
+-A INPUT -p tcp --dport 22 -j ACCEPT
+-A INPUT -p tcp --dport 22 -j DROP
+-A INPUT -s 1.2.3.4 -j ACCEPT
+-A INPUT -s 1.2.3.4 -p tcp -j DROP
+-A INPUT -j DROP

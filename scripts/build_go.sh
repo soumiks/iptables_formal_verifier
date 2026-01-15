@@ -31,19 +31,25 @@ rm -rf dafny-iptables-go
 
 # 1. Transpile Dafny to Go
 # --output:dafny-iptables will create 'dafny-iptables-go' directory
-dafny build --target:go src/IptablesToSmt.dfy --output:dafny-iptables
+# 1. Transpile Dafny to Go
+# --output:dafny-go-output will create 'dafny-go-output-go' directory
+dafny translate go src/Program.dfy --output:dafny-go-output --allow-external-contracts
+
+# Copy extern implementation
+echo "Copying externs..."
+cp src/dafny_extern.go dafny-go-output-go/src/Program/dafny_extern.go
 
 # 2. Build the final Go binary
 echo "Compiling Go binary..."
 # Dafny generates code that expects a GOPATH structure (src/PackageName),
 # so we set GOPATH to the generated directory.
-export GOPATH=$(pwd)/dafny-iptables-go
+export GOPATH=$(pwd)/dafny-go-output-go
 export GO111MODULE=off
 
-cd dafny-iptables-go/src
+cd dafny-go-output-go/src
 
 # Build the binary
-go build -o ../../$OUTPUT_NAME dafny-iptables.go
+go build -o ../../$OUTPUT_NAME dafny-go-output.go
 
 cd ../..
 
