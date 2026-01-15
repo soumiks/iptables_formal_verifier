@@ -9,30 +9,59 @@ A formally verified Dafny program that parses a subset of the `iptables-save` fo
 - **Unit Proofs**: Instead of runtime unit tests, this project uses compile-time "Unit Proofs" (`src/Tests.dfy`) which guarantee correctness for specific inputs mathematically.
 - **Precondition Propagation**: The codebase explicitly handles preconditions (like "no carriage returns") from the core logic all the way to the `Main` entry point.
 
-## Running the translator
+## Usage
 
-1. **Install Dafny**: Ensure you have Dafny 4.0+ installed.
-2. **Run on a file**:
+The tool processes iptables rules and supports several modes of operation, including translation to SMT-LIB, equivalence checking, packet querying, and optimization.
 
-   ```bash
-   dafny run src/IptablesToSmt.dfy -- "$(cat samples/iptables-sample.rules)" > rules.smt2
-   ```
+### 1. Translate to SMT-LIB (Default)
+Translates a rules file into an SMT-LIB 2.0 document.
 
-   The tool reads the entire input as a single string argument.
+```bash
+# Using the Go binary
+./dafny-iptables rules.txt > output.smt2
+
+# Using Dafny directly
+dafny run src/Program.dfy -- rules.txt > output.smt2
+```
+
+### 2. Check Equivalence
+Determines if two rule sets are logically equivalent (i.e., they treat every possible packet identically).
+
+```bash
+./dafny-iptables check-eq rules1.txt rules2.txt
+```
+**Output:**
+- `RESULT: EQUIVALENT`: The rules are identical in behavior.
+- `RESULT: NOT EQUIVALENT`: A counterexample packet is printed showing where they differ.
+
+### 3. Query Packet
+Queries how a specific packet would be treated by the rules. The packet constraint is specified using iptables syntax (e.g., `-p tcp --dport 80`).
+
+```bash
+./dafny-iptables query rules.txt "-p tcp --dport 80 -s 10.0.0.1"
+```
+**Output:** `Packet Action: ACCEPT` (or DROP, REJECT, etc.)
+
+### 4. Optimize Rules
+Identifies redundant rules that can be removed without changing the firewall's behavior.
+
+```bash
+./dafny-iptables optimize rules.txt
+```
+**Output:** A list of redundant rules with their line numbers.
 
 ## Building with Go
 
-To build a standalone executable using the Go backend:
+To build a standalone executable using the Go backend (requires Go 1.16+):
 
 ```bash
 ./scripts/build_go.sh
 ```
 
-This will produce a `dafny-iptables` binary in the project root. You can run it like this:
-
-```bash
-./dafny-iptables -- "$(cat samples/iptables-sample.rules)" > rules.smt2
-```
+This script:
+1. Translates the Dafny code to Go.
+2. Initializes a local Go module.
+3. Compiles the binary to `./dafny-iptables`.
 
 ## Verification
 
@@ -46,8 +75,10 @@ This will run the suite of Unit Proofs. A successful run (exit code 0) means the
 
 ## Project Structure
 
-- `src/IptablesToSmt.dfy`: Main application code, fully specified with `requires` and `ensures`.
-- `src/Tests.dfy`: The suite of Unit Proofs that acts as the constraint verification layer.
+- `src/IptablesToSmt.dfy`: Core logic for parsing and SMT generation.
+- `src/Analysis.dfy`: Logic for equivalence checking, querying, and optimization.
+- `src/Program.dfy`: Main entry point and CLI argument parsing.
+- `src/Tests.dfy`: The suite of Unit Proofs.
 - `samples/`: Sample iptables dump files.
 
 ## Modeling Details
@@ -56,7 +87,7 @@ This will run the suite of Unit Proofs. A successful run (exit code 0) means the
 - **Supported Flags (Parsed as Wildcard)**: `-i`, `-o`, `-t`, `-m` (and modules like `conntrack`, `limit`, `recent`), `--to-destination`, `--log-prefix`, etc. These are parsed to allow valid `iptables-save` files to process, but are currently treated as "always true" in the SMT encoding.
 - **Targets**: `ACCEPT`, `DROP`, `REJECT`, `RETURN` are modeled explicitly. Others are generic jumps.
 - **Logic**: Each `-A` rule is translated into a function `(define-fun ruleN ...)` and an assertion `(assert (=> (ruleN ...) action))`.
-- **Empty Input**: If the input contains no valid `-A` rules (e.g. empty file or filename passed as argument), the tool outputs nothing (empty string) instead of an SMT preamble.
+- **Empty Input**: If the input contains no valid `-A` rules, the tool outputs nothing (empty string) instead of an SMT preamble.
 
 ## License
 
