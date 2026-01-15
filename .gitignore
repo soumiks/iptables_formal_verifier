@@ -41,3 +41,4 @@ dafny-iptables
 
 # Generated C# files (from dafny run)
 *.cs
+dafny-go-output-go/

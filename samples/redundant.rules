@@ -1,0 +1,61 @@
+#!/bin/bash
+# WARNING: This is an example of POOR optimization for educational purposes.
+
+# --- 1. THE "SHADOWING" ERROR ---
+# This rule accepts ALL traffic on port 80 first. 
+ -A INPUT -p tcp --dport 80 -j ACCEPT
+
+# These subsequent rules are "Shadowed" and will NEVER be reached 
+# because the rule above already matched and accepted the traffic.
+ -A INPUT -p tcp -s 192.168.1.50 --dport 80 -j REJECT
+ -A INPUT -p tcp -s 10.0.0.0/8 --dport 80 -j DROP
+
+# --- 2. EXTREME REDUNDANCY ---
+# The same port is allowed 5 separate times using different flags 
+# that overlap or repeat the same result.
+ -A INPUT -p tcp --dport 443 -m state --state NEW -j ACCEPT
+ -A INPUT -p tcp --dport 443 -m conntrack --ctstate NEW -j ACCEPT
+ -A INPUT -p tcp --dport 443 -j ACCEPT
+ -A INPUT -p tcp -m multiport --dports 443 -j ACCEPT
+ -A INPUT -p tcp --dport 443 -m comment --comment "Redundant HTTPS" -j ACCEPT
+
+# --- 3. CIRCULAR LOGGING & DUPLICATION ---
+# Creating multiple chains that do the exact same thing
+ -N DROP_VAL_1
+ -N DROP_VAL_2
+ -A DROP_VAL_1 -j LOG --log-prefix "DROP1: "
+ -A DROP_VAL_1 -j DROP
+ -A DROP_VAL_2 -j LOG --log-prefix "DROP2: "
+ -A DROP_VAL_2 -j DROP
+
+# Applying both chains to the same traffic
+ -A INPUT -p udp --dport 123 -j DROP_VAL_1
+ -A INPUT -p udp --dport 123 -j DROP_VAL_2 # This is unreachable
+
+# --- 4. OVER-SPECIFIED PROTOCOL RULES ---
+# Instead of one rule, we define every possible TCP flag combination 
+# even though the default policy or a single 'INVALID' rule would suffice.
+ -A INPUT -p tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,PSH,URG -j DROP
+ -A INPUT -p tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE -j DROP
+ -A INPUT -p tcp --tcp-flags SYN,RST SYN,RST -j DROP
+ -A INPUT -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
+
+# --- 5. FRAGMENTED IP RANGES ---
+# Instead of using a CIDR block (192.168.1.0/24), we list individual IPs.
+# This slows down the kernel as it must check every single rule sequentially.
+for i in {1..254}; do
+     -A INPUT -s 192.168.1.$i -j ACCEPT
+done
+
+# --- 6. CONFLICTING OUTPUT RULES ---
+# Allowing then immediately blocking the same destination
+ -A OUTPUT -d 8.8.8.8 -j ACCEPT
+ -A OUTPUT -d 8.8.8.8 -j REJECT --reject-with icmp-net-unreachable
+
+# --- 7. THE "KITCHEN SINK" ICMP SECTION ---
+# Redundantly filtering ICMP types that are already covered by stateful rules
+ -A INPUT -p icmp --icmp-type echo-request -j ACCEPT
+ -A INPUT -p icmp --icmp-type 8 -j ACCEPT # Duplicate of above (Type 8 is echo-request)
+ -A INPUT -p icmp --icmp-type destination-unreachable -j ACCEPT
+ -A INPUT -p icmp --icmp-type 3 -j ACCEPT # Duplicate of above
+

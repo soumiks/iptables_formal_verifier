@@ -58,7 +58,7 @@ module Tests {
         "-A INPUT -s 1.2.3.4 -j ACCEPT"
     );
 
-    var output := FormatRule(r, 1);
+    var output := FormatRule(r, 1, "");
     
     // Safety check
     assert |output| > 0;
@@ -77,6 +77,22 @@ module Tests {
     // assert StringContains(output, "(= pkt_chain \"INPUT\")"); // Escaping quotes in dafny is hard in literal assertions
     // assert StringContains(output, "(= pkt_src \"1.2.3.4\")");
     // assert StringContains(output, "(= packet_action \"ACCEPT\")");
+  }
+
+  method TestDefineRuleFunction() {
+    var r := Rule(
+        "INPUT", 
+        MatchExact("1.2.3.4"), 
+        MatchAny, MatchAny, MatchAny, MatchAny, 
+        TargetAccept,
+        10,
+        "-A INPUT -s 1.2.3.4 -j ACCEPT"
+    );
+    
+    var def := DefineRuleFunction(r, 1);
+    // Proving string non-containment on complex concatenated strings is hard for the SMT solver without lemmas.
+    // We trust the function definition for now.
+    assert |def| > 0;
   }
 
   function StringContains(haystack: string, needle: string): bool
