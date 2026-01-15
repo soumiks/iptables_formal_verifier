@@ -24,10 +24,10 @@ module Program {
   method Main(args: seq<string>) {
       if |args| <= 1 {
           print "Usage:\n";
-          print "  dafny-iptables <rules_file>               (Translate to SMT)\n";
-          print "  dafny-iptables check-eq <f1> <f2>         (Check Equivalence)\n";
-          print "  dafny-iptables query <f> \"constraint\"     (Query Packet)\n";
-          print "  dafny-iptables optimize <f>               (Find Redundant)\n";
+          print "  iptables-verifier <rules_file>               (Translate to SMT)\n";
+          print "  iptables-verifier check-eq <f1> <f2>         (Check Equivalence)\n";
+          print "  iptables-verifier query <f> \"constraint\"     (Query Packet)\n";
+          print "  iptables-verifier optimize <f>               (Find Redundant)\n";
           return;
       }
       

@@ -5,7 +5,7 @@ set -e
 export GO111MODULE=on
 
 # Default output name
-OUTPUT_NAME="dafny-iptables"
+OUTPUT_NAME="iptables-verifier"
 
 # Check for required tools
 if ! command -v dafny &> /dev/null; then

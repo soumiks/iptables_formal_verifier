@@ -65,7 +65,7 @@ module IptablesToSmt {
   method GetUsageString() returns (text: string)
     ensures |text| > 0
   {
-    text := "Usage:\n  dafny run src/IptablesToSmt.dfy -- \"$(cat rules.txt)\"\n  ./scripts/iptables_to_smt.sh rules.txt\n";
+    text := "Usage:\n  iptables-verifier <rules_file>\n  dafny run src/IptablesToSmt.dfy -- \"$(cat rules.txt)\"\n";
   }
 
   // Splits the input into rules, parses them, and builds the SMT document.
