@@ -22,6 +22,7 @@ module IptablesToSmt {
     | TargetReject
     | TargetReturn
     | TargetJump(name: string) // Variants can carry data (like string name)
+    | TargetContinue           // No target specified (e.g. just setting a flag or logging)
 
   // Represents a match criteria for a packet field.
   datatype FieldMatch =
@@ -58,6 +59,10 @@ module IptablesToSmt {
       // Gets the value of a variable in the current model.
       // Precondition: check-sat must have returned Sat previously.
       method GetValue(variable: string) returns (val: string)
+
+      // Gets the unsat core (list of named assertions that caused contradiction).
+      // Precondition: check-sat must have returned Unsat previously.
+      method GetUnsatCore() returns (core: seq<string>)
   }
 
 
@@ -196,7 +201,7 @@ module IptablesToSmt {
   {
     // Check for minimum length: -A <CHAIN> ...
     if |tokens| < 3 {
-      rule := Rule("", MatchAny, MatchAny, MatchAny, MatchAny, MatchAny, TargetReturn, lineNumber, rawLine);
+      rule := Rule("", MatchAny, MatchAny, MatchAny, MatchAny, MatchAny, TargetContinue, lineNumber, rawLine);
       ok := false;
       return;
     }
@@ -220,8 +225,8 @@ module IptablesToSmt {
        target := ParseTarget(targetMatch.value);
        targetOk := true;
     } else {
-       target := TargetReturn;
-       // targetOk remains false
+       target := TargetContinue;
+       targetOk := true;
     }
 
     // Strictness check: explicitly use the verified predicate
@@ -270,10 +275,12 @@ module IptablesToSmt {
       builder := builder + "\n";
       
       // Update prevNegations to include this rule
-      // (not (ruleN packet_chain packet_src packet_dst packet_proto packet_sport packet_dport))
-      var indexText := IntToString(i);
-      var call := "(rule" + indexText + " packet_chain packet_src packet_dst packet_proto packet_sport packet_dport)";
-      prevNegations := prevNegations + " (not " + call + ")";
+      // ONLY if it is terminating.
+      if IsTerminating(rules[i].target) {
+          var indexText := IntToString(i);
+          var call := "(rule" + indexText + " packet_chain packet_src packet_dst packet_proto packet_sport packet_dport)";
+          prevNegations := prevNegations + " (not " + call + ")";
+      }
       
       i := i + 1;
     }
@@ -343,6 +350,18 @@ module IptablesToSmt {
       case TargetReject => "REJECT"
       case TargetReturn => "RETURN"
       case TargetJump(name) => name
+      case TargetContinue => "CONTINUE"
+  }
+
+  function IsTerminating(target: Target): bool
+  {
+    match target
+      case TargetAccept => true
+      case TargetDrop => true
+      case TargetReject => true
+      case TargetReturn => true
+      case TargetJump(_) => false // Conservative: Jump might return
+      case TargetContinue => false
   }
 
   function FormatStringLiteral(text: string): string
@@ -401,16 +420,18 @@ module IptablesToSmt {
   function AssertRuleLogic(rule: Rule, index: int, prevNegations: string, actionVar: string): string
     requires index >= 0
   {
-     var indexText := IntToString(index);
-     var targetLiteral := FormatTargetLiteral(rule.target);
-     
-     // First-match-wins logic:
-     // (assert (=> (and (ruleN ...) prevNegations) (= actionVar TARGET)))
-     
-     var ruleCall := "(rule" + indexText + " packet_chain packet_src packet_dst packet_proto packet_sport packet_dport)";
-     var premise := if prevNegations == "" then ruleCall else "(and " + ruleCall + prevNegations + ")";
-     
-     "(assert (=> " + premise + "\n" +
+     if !IsTerminating(rule.target) then ""
+     else
+       var indexText := IntToString(index);
+       var targetLiteral := FormatTargetLiteral(rule.target);
+       
+       // First-match-wins logic:
+       // (assert (=> (and (ruleN ...) prevNegations) (= actionVar TARGET)))
+       
+       var ruleCall := "(rule" + indexText + " packet_chain packet_src packet_dst packet_proto packet_sport packet_dport)";
+       var premise := if prevNegations == "" then ruleCall else "(and " + ruleCall + prevNegations + ")";
+       
+       "(assert (=> " + premise + "\n" +
        "            (= " + actionVar + " " + targetLiteral + ")))\n"
   }
 
@@ -443,6 +464,7 @@ module IptablesToSmt {
                              !EqualsIgnoreCase(raw, "DROP") && 
                              !EqualsIgnoreCase(raw, "REJECT") && 
                              !EqualsIgnoreCase(raw, "RETURN")
+    case TargetContinue => false // User cannot specify "CONTINUE" explicitly usually, but if so, maybe?
   }
 
   method ParseTarget(raw: string) returns (target: Target)

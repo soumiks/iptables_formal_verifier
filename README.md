@@ -18,7 +18,7 @@ Translates a rules file into an SMT-LIB 2.0 document.
 
 ```bash
 # Using the Go binary
-./dafny-iptables rules.txt > output.smt2
+./iptables-verifier rules.txt > output.smt2
 
 # Using Dafny directly
 dafny run src/Program.dfy -- rules.txt > output.smt2
@@ -28,7 +28,7 @@ dafny run src/Program.dfy -- rules.txt > output.smt2
 Determines if two rule sets are logically equivalent (i.e., they treat every possible packet identically).
 
 ```bash
-./dafny-iptables check-eq rules1.txt rules2.txt
+./iptables-verifier check-eq rules1.txt rules2.txt
 ```
 **Output:**
 - `RESULT: EQUIVALENT`: The rules are identical in behavior.
@@ -38,7 +38,7 @@ Determines if two rule sets are logically equivalent (i.e., they treat every pos
 Queries how a specific packet would be treated by the rules. The packet constraint is specified using iptables syntax (e.g., `-p tcp --dport 80`).
 
 ```bash
-./dafny-iptables query rules.txt "-p tcp --dport 80 -s 10.0.0.1"
+./iptables-verifier query rules.txt "-p tcp --dport 80 -s 10.0.0.1"
 ```
 **Output:** `Packet Action: ACCEPT` (or DROP, REJECT, etc.)
 
@@ -46,7 +46,7 @@ Queries how a specific packet would be treated by the rules. The packet constrai
 Identifies redundant rules that can be removed without changing the firewall's behavior.
 
 ```bash
-./dafny-iptables optimize rules.txt
+./iptables-verifier optimize rules.txt
 ```
 **Output:** A list of redundant rules with their line numbers.
 
@@ -61,7 +61,7 @@ To build a standalone executable using the Go backend (requires Go 1.16+):
 This script:
 1. Translates the Dafny code to Go.
 2. Initializes a local Go module.
-3. Compiles the binary to `./dafny-iptables`.
+3. Compiles the binary to `./iptables-verifier`.
 
 ## Verification
 

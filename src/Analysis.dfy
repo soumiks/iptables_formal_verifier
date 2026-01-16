@@ -50,9 +50,11 @@ module Analysis {
        var assertion := AssertRuleLogic(rule, i, prevNegations1, "packet_action_1");
        var _ := solver.SendCommand(assertion);
        
-       var indexText := IntToString(i);
-       var call := "(rule" + indexText + " packet_chain packet_src packet_dst packet_proto packet_sport packet_dport)";
-       prevNegations1 := prevNegations1 + " (not " + call + ")";
+       if IsTerminating(rule.target) {
+           var indexText := IntToString(i);
+           var call := "(rule" + indexText + " packet_chain packet_src packet_dst packet_proto packet_sport packet_dport)";
+           prevNegations1 := prevNegations1 + " (not " + call + ")";
+       }
        
        i := i + 1;
     }
@@ -78,9 +80,11 @@ module Analysis {
        var assertion := AssertRuleLogic(rule, actualIndex, prevNegations2, "packet_action_2");
        var _ := solver.SendCommand(assertion);
        
-       var indexText := IntToString(actualIndex);
-       var call := "(rule" + indexText + " packet_chain packet_src packet_dst packet_proto packet_sport packet_dport)";
-       prevNegations2 := prevNegations2 + " (not " + call + ")";
+       if IsTerminating(rule.target) {
+           var indexText := IntToString(actualIndex);
+           var call := "(rule" + indexText + " packet_chain packet_src packet_dst packet_proto packet_sport packet_dport)";
+           prevNegations2 := prevNegations2 + " (not " + call + ")";
+       }
        
        j := j + 1;
     }
@@ -142,9 +146,11 @@ module Analysis {
        var assertion := AssertRuleLogic(rule, i, prevNegations, "packet_action");
        var _ := solver.SendCommand(assertion);
        
-       var indexText := IntToString(i);
-       var call := "(rule" + indexText + " packet_chain packet_src packet_dst packet_proto packet_sport packet_dport)";
-       prevNegations := prevNegations + " (not " + call + ")";
+       if IsTerminating(rule.target) {
+           var indexText := IntToString(i);
+           var call := "(rule" + indexText + " packet_chain packet_src packet_dst packet_proto packet_sport packet_dport)";
+           prevNegations := prevNegations + " (not " + call + ")";
+       }
        i := i + 1;
     }
     
@@ -173,12 +179,15 @@ module Analysis {
   }
 
   // Finds indices of rules that are redundant (shadowed by previous rules).
-  method FindRedundantRules(rules: seq<Rule>, solver: SmtSolver) returns (redundantIndices: seq<int>)
+  // Returns a sequence of tuples: (redundantRuleIndex, sequenceOfShadowingRuleIndices)
+  method FindRedundantRules(rules: seq<Rule>, solver: SmtSolver) returns (redundantInfo: seq<(int, seq<int>)>)
     modifies solver
   {
     // 1. Reset & Setup
     var _ := solver.SendCommand("(reset)");
     var _ := solver.SendCommand("(set-logic ALL)");
+    var _ := solver.SendCommand("(set-option :produce-unsat-cores true)"); // ENABLE CORE PRODUCTION
+
     var decls := [
       "(declare-const packet_chain String)",
       "(declare-const packet_src String)",
@@ -186,20 +195,17 @@ module Analysis {
       "(declare-const packet_proto String)",
       "(declare-const packet_sport String)",
       "(declare-const packet_dport String)",
-      "(declare-const packet_action String)", // Not strictly needed for reachability but keeps consistency
+      "(declare-const packet_action String)",
       "(assert (distinct packet_chain \"\"))"
     ];
     var k := 0; 
     while k < |decls| { var _ := solver.SendCommand(decls[k]); k := k + 1; }
     
-    redundantIndices := [];
+    redundantInfo := [];
     
     // 2. Loop through rules
-    // Pattern: 
-    //   Context = (not rule0) AND (not rule1) ...
-    //   Test Rule K: Assert Context AND ruleK.
-    //   If Unsat => Rule K matches nothing new => Redundant.
-    //   Update Context: Add (not ruleK).
+    // We name each rule's negation in the context so we can see which one contributes to unsat.
+    // Context: (not rule0) labeled "r_0", (not rule1) labeled "r_1" ...
     
     var i := 0;
     while i < |rules|
@@ -221,17 +227,61 @@ module Analysis {
        var res := solver.CheckSat();
        if res == Unsat {
           // Reachable? No. -> Redundant
-          redundantIndices := redundantIndices + [i];
+          // Ask why? Get core.
+          var core := solver.GetUnsatCore();
+          var shadowers := ParseCoreForIndices(core);
+          redundantInfo := redundantInfo + [(i, shadowers)];
        }
        
        var _ := solver.SendCommand("(pop)"); // Restore to just context
        
        // Add this rule's negation to the context for future rules
-       // "If we reached here, we didn't match previous rules AND we didn't match this one"
-       // Actually, for reachability of NEXT rule, we assume we didn't match THIS rule.
-       var _ := solver.SendCommand("(assert (not " + ruleCall + "))");
+       // Label it!
+       // Only if terminating!
+       if IsTerminating(rule.target) {
+           var name := "r_" + indexText;
+           var assertion := "(assert (! (not " + ruleCall + ") :named " + name + "))";
+           var _ := solver.SendCommand(assertion);
+       }
        
        i := i + 1;
     }
+  }
+
+  // Helper to parse strings like "r_0", "r_5" into integers [0, 5]
+  method ParseCoreForIndices(core: seq<string>) returns (indices: seq<int>)
+  {
+    indices := [];
+    var k := 0;
+    while k < |core| {
+        var name := core[k];
+        // Expect "r_XYZ"
+        if |name| > 2 && name[0..2] == "r_" {
+             var numStr := name[2..];
+             var idx := StringToInt(numStr);
+             if idx >= 0 {
+                 indices := indices + [idx];
+             }
+        }
+        k := k + 1;
+    }
+    // Sort indices for cleaner output? Not strictly necessary for MVP.
+  }
+
+  function StringToInt(s: string): int
+  {
+      if |s| == 0 then -1
+      else StringToIntRec(s, 0)
+  }
+
+  function StringToIntRec(s: string, acc: int): int
+  {
+      if |s| == 0 then acc
+      else 
+        var ch := s[0];
+        if '0' <= ch <= '9' then
+            var d := (ch as int - '0' as int);
+            StringToIntRec(s[1..], acc * 10 + d)
+        else -1 // Error
   }
 }

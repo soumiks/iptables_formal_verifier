@@ -156,3 +156,39 @@ func (_this *RealSmtSolver) ReadFile(path _dafny.Sequence) (_dafny.Sequence, boo
     s = strings.ReplaceAll(s, "\r", "")
     return _dafny.UnicodeSeqOfUtf8Bytes(s), true
 }
+
+func (_this *RealSmtSolver) GetUnsatCore() _dafny.Sequence {
+    wrapperInterface, ok := solverMap.Load(_this)
+    if !ok {
+        return _dafny.EmptySeq
+    }
+    wrapper := wrapperInterface.(*Z3Wrapper)
+
+    cmd := "(get-unsat-core)"
+    
+    _, err := wrapper.stdin.WriteString(cmd + "\n")
+    if err != nil {
+        return _dafny.EmptySeq
+    }
+    wrapper.stdin.Flush()
+    
+    // Output: (r_0 r_5 ...)
+    if wrapper.stdout.Scan() {
+        line := wrapper.stdout.Text()
+        line = strings.TrimSpace(line)
+        line = strings.TrimPrefix(line, "(")
+        line = strings.TrimSuffix(line, ")")
+        
+        parts := strings.Split(line, " ")
+        
+        seq := make([]interface{}, 0, len(parts))
+        for _, p := range parts {
+            if len(p) > 0 {
+                seq = append(seq, _dafny.UnicodeSeqOfUtf8Bytes(p))
+            }
+        }
+        return _dafny.SeqOf(seq...)
+    }
+    
+    return _dafny.EmptySeq
+}

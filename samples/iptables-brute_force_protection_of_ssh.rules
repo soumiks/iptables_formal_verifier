@@ -1,10 +1,11 @@
-# Accept traffic if the rate limit is not exceeded
--A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --update --seconds 60 --hitcount 4 -j ACCEPT
+# 1. Set/Track
+-A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --set --name SSH_LIMIT
 
-# Limit new SSH connections to 3 attempts per minute per IP address
--A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --set
+# 2. Log if limit exceeded (Check ONLY, do not update timestamp to avoid double counting)
+-A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --rcheck --seconds 60 --hitcount 4 --name SSH_LIMIT -j LOG --log-prefix "SSH Brute Force: "
 
-# Optional: Log and drop traffic that exceeds the limit
--A INPUT -p tcp --dport 22 -j LOG --log-prefix "SSH Brute Force Attempt: "
--A INPUT -p tcp --dport 22 -j DROP
+# 3. Drop if limit exceeded
+-A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --update --seconds 60 --hitcount 4 --name SSH_LIMIT -j DROP
 
+# 4. Accept legitimate traffic
+-A INPUT -p tcp --dport 22 -j ACCEPT

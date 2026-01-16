@@ -1,0 +1,2 @@
+-A INPUT -s 10.0.0.1 -j ACCEPT
+-A INPUT -s 10.0.0.1 -j DROP

@@ -17,6 +17,8 @@ module Program {
 
       method {:extern} GetValue(variable: string) returns (val: string) 
 
+      method {:extern} GetUnsatCore() returns (core: seq<string>)
+
       method {:extern} ReadFile(path: string) returns (content: string, ok: bool)
           ensures ok ==> forall k :: 0 <= k < |content| ==> content[k] != '\r'
   }
@@ -153,9 +155,23 @@ module Program {
               print "Redundant rules found:\n";
               var i := 0;
               while i < |redundant| {
-                  var idx := redundant[i];
-                  if 0 <= idx < |rules| {
-                      print "Rule ", idx, " (line ", rules[idx].lineNumber, "): ", rules[idx].original, "\n";
+                  var redIdx := redundant[i].0;
+                  var shadowers := redundant[i].1;
+                  
+                  if 0 <= redIdx < |rules| {
+                      print "Rule ", redIdx, " (line ", rules[redIdx].lineNumber, ") is redundant.";
+                      
+                      if |shadowers| > 0 {
+                          print " Shadowed by: ";
+                          var k := 0;
+                          while k < |shadowers| {
+                             if k > 0 { print ", "; }
+                             print "Rule ", shadowers[k];
+                             k := k + 1;
+                          }
+                      }
+                      print "\n";
+                      print "  Code: ", rules[redIdx].original, "\n\n";
                   }
                   i := i + 1;
               }
